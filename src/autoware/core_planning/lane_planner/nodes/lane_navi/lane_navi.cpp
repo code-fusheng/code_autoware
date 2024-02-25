@@ -173,6 +173,8 @@ void update_values()
 	}
 }
 
+// lane_planner::vmap::VectorMap 用于存储决策规划所需要的部分矢量地图要素
+
 void cache_point(const vector_map::PointArray& msg)
 {
 	all_vmap.points = msg.data;
@@ -193,6 +195,9 @@ void cache_node(const vector_map::NodeArray& msg)
 
 } // namespace
 
+/**
+ * 主要作用: 根据路由请求在矢量地图中寻找通往目的地的可行路径，并发布至话题 /lane_waypoints_array
+*/
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "lane_navi");
@@ -227,6 +232,7 @@ int main(int argc, char **argv)
 								 pub_waypoint_latch);
 
 	ros::Subscriber route_sub = n.subscribe("/route_cmd", sub_route_queue_size, create_waypoint);
+	// 回调函数 cache_point cache_lane cache_node 更新 all_vmap 对应值
 	ros::Subscriber point_sub = n.subscribe("/vector_map_info/point", sub_vmap_queue_size, cache_point);
 	ros::Subscriber lane_sub = n.subscribe("/vector_map_info/lane", sub_vmap_queue_size, cache_lane);
 	ros::Subscriber node_sub = n.subscribe("/vector_map_info/node", sub_vmap_queue_size, cache_node);

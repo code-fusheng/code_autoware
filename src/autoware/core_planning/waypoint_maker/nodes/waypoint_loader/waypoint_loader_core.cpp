@@ -31,14 +31,21 @@ WaypointLoaderNode::~WaypointLoaderNode()
 
 void WaypointLoaderNode::initPubSub()
 {
+  // 默认值: /tmp/driving_lane.csv
   private_nh_.param<std::string>("multi_lane_csv", multi_lane_csv_, "/tmp/driving_lane.csv");
   // setup publisher
+  // lane_pub_ 消息发布者
   lane_pub_ = nh_.advertise<autoware_msgs::LaneArray>("/based/lane_waypoints_raw", 10, true);
 }
 
+/**
+ * run 函数
+ * 读取存储的轨迹点文件 并发布值话题 /based/lane_waypoints_raw
+*/
 void WaypointLoaderNode::run()
 {
   multi_file_path_.clear();
+  // parseColumns 函数
   parseColumns(multi_lane_csv_, &multi_file_path_);
   autoware_msgs::LaneArray lane_array;
   createLaneArray(multi_file_path_, &lane_array);
@@ -47,6 +54,9 @@ void WaypointLoaderNode::run()
   ros::spin();
 }
 
+/**
+ * 将 paths 中各个本地路径文件中包含的信息分别填入 lane 中，再将 lane 依次填入 lane_array
+*/
 void WaypointLoaderNode::createLaneArray(const std::vector<std::string>& paths, autoware_msgs::LaneArray* lane_array)
 {
   for (const auto& el : paths)
@@ -280,6 +290,10 @@ bool WaypointLoaderNode::verifyFileConsistency(const char* filename)
   return true;
 }
 
+/**
+ * parseColumns 函数
+ * 以 ，作为分隔符将字符串 line 分成若干段 去除全部空格 依次存储至字符串向量 columns 中
+*/
 void parseColumns(const std::string& line, std::vector<std::string>* columns)
 {
   std::istringstream ss(line);

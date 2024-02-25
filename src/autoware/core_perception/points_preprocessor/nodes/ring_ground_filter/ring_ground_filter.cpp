@@ -13,13 +13,15 @@
 #include <velodyne_pointcloud/point_types.h>
 #include <opencv/cv.h>
 
+// 定义Label枚举类型
 enum Label
 {
-	GROUND,
-	VERTICAL,
-	UNKNOWN //Initial state, not classified
+	GROUND,		// 地面
+	VERTICAL,	// 垂直
+	UNKNOWN		// 未分类 //Initial state, not classified
 };
 
+// 点云地面过滤
 class GroundFilter
 {
 public:
@@ -34,13 +36,16 @@ private:
 	ros::Publisher ground_points_pub_;
 
 	std::string point_topic_;
+	// 输出去除地面和仅包含地面的点云话题
 	std::string no_ground_topic, ground_topic;
 	int 		sensor_model_;
+	// 传感器高度
 	double 		sensor_height_;
 	double 		max_slope_;
 	double vertical_thres_;
+	// 是否移除地面
 	bool		floor_removal_;
-
+	// 垂直和水平分辨率
 	int 		vertical_res_;
 	int 		horizontal_res_;
 	cv::Mat 	index_map_;
@@ -68,14 +73,15 @@ private:
 
 GroundFilter::GroundFilter() : node_handle_("~")
 {
+	// 初始化参数
 	ROS_INFO("Inititalizing Ground Filter...");
 	node_handle_.param<std::string>("point_topic", point_topic_, "/points_raw");
 	ROS_INFO("Input Point Cloud: %s", point_topic_.c_str());
  	node_handle_.param("remove_floor",  floor_removal_,  true);
  	ROS_INFO("Floor Removal: %d", floor_removal_);
-	node_handle_.param("sensor_model", sensor_model_, 64);
+	node_handle_.param("sensor_model", sensor_model_, 16);
 	ROS_INFO("Sensor Model: %d", sensor_model_);
-	node_handle_.param("sensor_height", sensor_height_, 1.80);
+	node_handle_.param("sensor_height", sensor_height_, 0.625);
 	ROS_INFO("Sensor Height: %f", sensor_height_);
 	node_handle_.param("max_slope", max_slope_, 10.0);
 	ROS_INFO("Max Slope: %f", max_slope_);
@@ -87,7 +93,7 @@ GroundFilter::GroundFilter() : node_handle_("~")
 	node_handle_.param<std::string>("ground_point_topic", ground_topic, "/points_ground");
 	ROS_INFO("Only Ground Output Point Cloud: %s", ground_topic.c_str());
 
-
+	// 根据激光线束赋值分辨率
 	int default_horizontal_res;
 	switch(sensor_model_)
 	{
@@ -106,10 +112,12 @@ GroundFilter::GroundFilter() : node_handle_("~")
 	}
 	node_handle_.param("horizontal_res", horizontal_res_, default_horizontal_res);
 
+	// 订阅点云数据的回调函数
 	points_node_sub_ = node_handle_.subscribe(point_topic_, 10000, &GroundFilter::VelodyneCallback, this);
+	// 初始化ROS发布器
 	groundless_points_pub_ = node_handle_.advertise<sensor_msgs::PointCloud2>(no_ground_topic, 10000);
 	ground_points_pub_ = node_handle_.advertise<sensor_msgs::PointCloud2>(ground_topic, 10000);
-
+	// 初始化垂直分辨率、标签数组和半径表
 	vertical_res_ = sensor_model_;
 	InitLabelArray(sensor_model_);
 	InitRadiusTable(sensor_model_);
@@ -123,11 +131,15 @@ void GroundFilter::InitLabelArray(int in_model)
 	}
 }
 
+/**
+ * 初始化半径表
+*/
 void GroundFilter::InitRadiusTable(int in_model)
 {
 	double a;
 	double b;
 	double theta;
+	// 根据不同的传感器型号计算半径表
 	switch (in_model)
 	{
 		case 64:
@@ -189,12 +201,15 @@ void GroundFilter::InitRadiusTable(int in_model)
 	}
 }
 
+// 初始化深度图
 void GroundFilter::InitDepthMap(int in_width)
 {
 	const int mOne = -1;
+	// 使用OpenCV的Mat来存储索引映射
 	index_map_ = cv::Mat_<int>(vertical_res_, in_width, mOne);
 }
 
+// 进行地面过滤的核心函数
 void GroundFilter::FilterGround(const pcl::PointCloud<velodyne_pointcloud::PointXYZIR>::ConstPtr &in_cloud_msg,
 			pcl::PointCloud<velodyne_pointcloud::PointXYZIR> &out_groundless_points,
 			pcl::PointCloud<velodyne_pointcloud::PointXYZIR> &out_ground_points)

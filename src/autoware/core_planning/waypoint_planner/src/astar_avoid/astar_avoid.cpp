@@ -16,6 +16,10 @@
 
 #include "waypoint_planner/astar_avoid/astar_avoid.h"
 
+/**
+ * AstarAvoid
+ * 主要作用: 基于节点 lane_select 发布在话题 base_waypoints 上的轨迹，利用 A* 算法规划避障轨迹并发布至话题 safety_waypoints
+*/
 AstarAvoid::AstarAvoid()
   : nh_()
   , private_nh_("~")
@@ -29,6 +33,7 @@ AstarAvoid::AstarAvoid()
   , closest_waypoint_initialized_(false)
   , terminate_thread_(false)
 {
+  // 设置变量
   private_nh_.param<int>("safety_waypoints_size", safety_waypoints_size_, 100);
   private_nh_.param<double>("update_rate", update_rate_, 10.0);
 
@@ -40,7 +45,9 @@ AstarAvoid::AstarAvoid()
   private_nh_.param<int>("search_waypoints_delta", search_waypoints_delta_, 2);
   private_nh_.param<int>("closest_search_size", closest_search_size_, 30);
 
+  // 定义发布者
   safety_waypoints_pub_ = nh_.advertise<autoware_msgs::Lane>("safety_waypoints", 1, true);
+  // 设置订阅
   costmap_sub_ = nh_.subscribe("costmap", 1, &AstarAvoid::costmapCallback, this);
   current_pose_sub_ = nh_.subscribe("current_pose", 1, &AstarAvoid::currentPoseCallback, this);
   current_velocity_sub_ = nh_.subscribe("current_velocity", 1, &AstarAvoid::currentVelocityCallback, this);
@@ -56,6 +63,10 @@ AstarAvoid::~AstarAvoid()
   publish_thread_.join();
 }
 
+/**
+ * costmapCallback 函数
+ * 主要作用: 用于更新 costmap_ 、local2costmap_ 、costmap_initialized_
+*/
 void AstarAvoid::costmapCallback(const nav_msgs::OccupancyGrid& msg)
 {
   costmap_ = msg;
@@ -129,6 +140,9 @@ void AstarAvoid::obstacleWaypointCallback(const std_msgs::Int32& msg)
   obstacle_waypoint_index_ = msg.data;
 }
 
+/**
+ * 有限状态机
+*/
 void AstarAvoid::run()
 {
   // check topics
@@ -137,6 +151,7 @@ void AstarAvoid::run()
   while (ros::ok())
   {
     ros::spinOnce();
+    // 检查回调函数是否正常
     if (checkInitialized())
     {
       break;
@@ -146,17 +161,21 @@ void AstarAvoid::run()
   }
 
   // main loop
+  // 主循环
   int end_of_avoid_index = -1;
   ros::WallTime start_plan_time = ros::WallTime::now();
   ros::WallTime start_avoid_time = ros::WallTime::now();
 
   // reset obstacle index
+  // 重置障碍物下标
   obstacle_waypoint_index_ = -1;
 
   // relaying mode at startup
+  // 启动时设置为 中继模式
   state_ = AstarAvoid::STATE::RELAYING;
 
   // start publish thread
+  // 启动发布者线程
   publish_thread_ = std::thread(&AstarAvoid::publishWaypoints, this);
 
   while (ros::ok())
@@ -164,6 +183,7 @@ void AstarAvoid::run()
     ros::spinOnce();
 
     // relay mode
+    // 中继模式
     if (!enable_avoidance_)
     {
       rate_->sleep();
@@ -171,6 +191,7 @@ void AstarAvoid::run()
     }
 
     // avoidance mode
+    // 避让模式
     bool found_obstacle = (obstacle_waypoint_index_ >= 0);
     bool avoid_velocity = (current_velocity_.twist.linear.x < avoid_start_velocity_ / 3.6);
 
@@ -178,7 +199,7 @@ void AstarAvoid::run()
     if (state_ == AstarAvoid::STATE::RELAYING)
     {
       avoid_waypoints_ = base_waypoints_;
-
+      // 发现障碍物从 中继模式 => 停车模式
       if (found_obstacle)
       {
         ROS_INFO("RELAYING -> STOPPING, Decelerate for stopping");
@@ -187,13 +208,15 @@ void AstarAvoid::run()
     }
     else if (state_ == AstarAvoid::STATE::STOPPING)
     {
+      // 检查重规划时间间隔条件
       bool replan = ((ros::WallTime::now() - start_plan_time).toSec() > replan_interval_);
-
+      // 障碍物消失，重新回到中继模式
       if (!found_obstacle)
       {
         ROS_INFO("STOPPING -> RELAYING, Obstacle disappers");
         state_ = AstarAvoid::STATE::RELAYING;
       }
+      // 障碍物存在 且 满足重规划时间间隔和速度要求 从 停车模式 => 规划模式
       else if (replan && avoid_velocity)
       {
         ROS_INFO("STOPPING -> PLANNING, Start A* planning");
@@ -203,7 +226,8 @@ void AstarAvoid::run()
     else if (state_ == AstarAvoid::STATE::PLANNING)
     {
       start_plan_time = ros::WallTime::now();
-
+      // 确认避障路线并加入 avoid_waypoints_ 同时更新传入函数的 end_of_avoid_index
+      // 避障路线规划成功则从规划模式转换为避障模式 否则切换为 停车模式
       if (planAvoidWaypoints(end_of_avoid_index))
       {
         ROS_INFO("PLANNING -> AVOIDING, Found path");
@@ -258,6 +282,10 @@ bool AstarAvoid::checkInitialized()
   return initialized;
 }
 
+/**
+ * planAvoidWaypoints 函数
+ * 内部调用 A* 搜索算法
+*/
 bool AstarAvoid::planAvoidWaypoints(int& end_of_avoid_index)
 {
   bool found_path = false;
@@ -280,10 +308,12 @@ bool AstarAvoid::planAvoidWaypoints(int& end_of_avoid_index)
                                           getTransform(costmap_.header.frame_id, goal_pose_global_.header.frame_id));
 
     // initialize costmap for A* search
+    // 初始化 A* 搜索的代价地图 nodes_
     astar_.initialize(costmap_);
 
     // execute astar search
     // ros::WallTime start = ros::WallTime::now();
+    // 设置搜索起点
     found_path = astar_.makePlan(current_pose_local_.pose, goal_pose_local_.pose);
     // ros::WallTime end = ros::WallTime::now();
 

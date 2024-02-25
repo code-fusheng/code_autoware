@@ -20,6 +20,10 @@
 // User defined includes
 #include <pure_pursuit/pure_pursuit_core.h>
 
+/**
+ * pure_pursuit 纯跟踪节点
+ * 纯跟踪控制节点需要接收规划的路径点序列、车辆当前位姿、车辆当前速度、节点中参数配置 => 发布轮胎转角和速度控制指令
+*/
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "pure_pursuit");

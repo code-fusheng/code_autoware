@@ -52,6 +52,7 @@ PurePursuitNode::~PurePursuitNode()
 void PurePursuitNode::initForROS()
 {
   // ros parameter settings
+  // 参数配置与初始化
   private_nh_.param("velocity_source", velocity_source_, 0);
   private_nh_.param("is_linear_interpolation", is_linear_interpolation_, true);
   private_nh_.param(
@@ -66,6 +67,7 @@ void PurePursuitNode::initForROS()
   nh_.param("vehicle_info/wheel_base", wheel_base_, 2.7);
 
   // setup subscriber
+  // 设置订阅
   sub1_ = nh_.subscribe("final_waypoints", 10,
     &PurePursuitNode::callbackFromWayPoints, this);
   sub2_ = nh_.subscribe("current_pose", 10,
@@ -76,16 +78,26 @@ void PurePursuitNode::initForROS()
     &PurePursuitNode::callbackFromCurrentVelocity, this);
 
   // setup publisher
+  // 设置发布者
+  // twist_raw 运动消息
   pub1_ = nh_.advertise<geometry_msgs::TwistStamped>("twist_raw", 10);
+  // ctrl_raw 控制命令消息
   pub2_ = nh_.advertise<autoware_msgs::ControlCommandStamped>("ctrl_raw", 10);
+  // rviz 的下一个路径点标志
   pub11_ = nh_.advertise<visualization_msgs::Marker>("next_waypoint_mark", 0);
+  // rviz 的下一个目标点标志
   pub12_ = nh_.advertise<visualization_msgs::Marker>("next_target_mark", 0);
+  // rviz 的下一个搜寻半径标志
   pub13_ = nh_.advertise<visualization_msgs::Marker>("search_circle_mark", 0);
   // debug tool
+  // 路径线示意
   pub14_ = nh_.advertise<visualization_msgs::Marker>("line_point_mark", 0);
+  // 运动轨迹示意
   pub15_ =
     nh_.advertise<visualization_msgs::Marker>("trajectory_circle_mark", 0);
+  // 横向加速度
   pub16_ = nh_.advertise<std_msgs::Float32>("angular_gravity", 0);
+  // 横向误差
   pub17_ = nh_.advertise<std_msgs::Float32>("deviation_of_current_position", 0);
   pub18_ =
     nh_.advertise<visualization_msgs::Marker>("expanded_waypoints_mark", 0);
@@ -99,25 +111,27 @@ void PurePursuitNode::run()
   while (ros::ok())
   {
     ros::spinOnce();
+    // 判断消息是否接收正常
     if (!is_pose_set_ || !is_waypoint_set_ || !is_velocity_set_)
     {
       ROS_WARN("Necessary topics are not subscribed yet ... ");
       loop_rate.sleep();
       continue;
     }
-
+    // 设置预喵距离
     pp_.setLookaheadDistance(computeLookaheadDistance());
     pp_.setMinimumLookaheadDistance(minimum_lookahead_distance_);
-
+    // 寻找下一目标点并计算曲率判断是否有效曲线
     double kappa = 0;
     bool can_get_curvature = pp_.canGetCurvature(&kappa);
-
+    // 发布控制命令
     publishTwistStamped(can_get_curvature, kappa);
     publishControlCommandStamped(can_get_curvature, kappa);
     health_checker_ptr_->NODE_ACTIVATE();
     health_checker_ptr_->CHECK_RATE("topic_rate_vehicle_cmd_slow", 8, 5, 1,
       "topic vehicle_cmd publish rate slow.");
     // for visualization with Rviz
+    // Rviz 可视化
     pub11_.publish(displayNextWaypoint(pp_.getPoseOfNextWaypoint()));
     pub13_.publish(displaySearchRadius(
       pp_.getCurrentPose().position, pp_.getLookaheadDistance()));
@@ -130,11 +144,12 @@ void PurePursuitNode::run()
       pub18_.publish(
         displayExpandWaypoints(pp_.getCurrentWaypoints(), expand_size_));
     }
+    // 计算横向加速度并发布
     std_msgs::Float32 angular_gravity_msg;
     angular_gravity_msg.data =
       computeAngularGravity(computeCommandVelocity(), kappa);
     pub16_.publish(angular_gravity_msg);
-
+    // 计算车辆与跟踪路径曲线的横向误差
     publishDeviationCurrentPosition(
       pp_.getCurrentPose().position, pp_.getCurrentWaypoints());
 
@@ -235,6 +250,9 @@ double PurePursuitNode::computeAngularGravity(
   return (velocity * velocity) / (1.0 / kappa * gravity);
 }
 
+/**
+ * 参数配置回调函数
+*/
 void PurePursuitNode::callbackFromConfig(
   const autoware_config_msgs::ConfigWaypointFollowerConstPtr& config)
 {
@@ -275,6 +293,9 @@ void PurePursuitNode::callbackFromCurrentPose(
   is_pose_set_ = true;
 }
 
+/**
+ * 车辆当前速度话题的回调函数
+*/
 void PurePursuitNode::callbackFromCurrentVelocity(
   const geometry_msgs::TwistStampedConstPtr& msg)
 {

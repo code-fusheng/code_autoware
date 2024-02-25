@@ -246,7 +246,7 @@ void TrajectoryEval::callbackGetBehaviorState(const geometry_msgs::TwistStampedC
 void TrajectoryEval::MainLoop()
 {
 	ros::Rate loop_rate(100);
-
+	// 用于记录上一个状态和状态改变
 	PlannerHNS::WayPoint prevState, state_change;
 
 	while (ros::ok())
@@ -270,6 +270,7 @@ void TrajectoryEval::MainLoop()
 				if(m_bUseMoveingObjectsPrediction)
 					tc = m_TrajectoryCostsCalculator.DoOneStepDynamic(m_GeneratedRollOuts, m_GlobalPathSections.at(0), m_CurrentPos,m_PlanningParams,	m_CarInfo,m_VehicleStatus, m_PredictedObjects, m_CurrentBehavior.iTrajectory);
 				else
+					// 静态轨迹评估 	
 					tc = m_TrajectoryCostsCalculator.DoOneStepStatic(m_GeneratedRollOuts, m_GlobalPathSections.at(0), m_CurrentPos,	m_PlanningParams,	m_CarInfo,m_VehicleStatus, m_PredictedObjects);
 
 				autoware_msgs::Lane l;

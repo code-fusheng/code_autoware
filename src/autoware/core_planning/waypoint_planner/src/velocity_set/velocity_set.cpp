@@ -520,6 +520,9 @@ void changeWaypoints(const VelocitySetInfo& vs_info, const EControl& detection_r
 
 }  // end namespace
 
+/**
+ * 主要作用: 在节点 astar_avoid 发布在话题 safety_waypoints 上的轨迹基础 修正无人车靠近障碍物或停车线的速度
+*/
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "velocity_set");
@@ -543,6 +546,7 @@ int main(int argc, char** argv)
   VelocitySetInfo vs_info;
 
   // velocity set subscriber
+  // 订阅 速度设定
   ros::Subscriber waypoints_sub = nh.subscribe("safety_waypoints", 1, &VelocitySetPath::waypointsCallback, &vs_path);
   ros::Subscriber current_vel_sub =
       nh.subscribe("current_velocity", 1, &VelocitySetPath::currentVelocityCallback, &vs_path);
@@ -550,6 +554,7 @@ int main(int argc, char** argv)
 
 
   // velocity set info subscriber
+  // 订阅 速度设定配置
   ros::Subscriber config_sub = nh.subscribe("config/velocity_set", 1, &VelocitySetInfo::configCallback, &vs_info);
   ros::Subscriber points_sub = nh.subscribe(points_topic, 1, &VelocitySetInfo::pointsCallback, &vs_info);
   ros::Subscriber localizer_sub = nh.subscribe("localizer_pose", 1, &VelocitySetInfo::localizerPoseCallback, &vs_info);
@@ -557,12 +562,14 @@ int main(int argc, char** argv)
   ros::Subscriber detectionresult_sub = nh.subscribe("/state/stopline_wpidx", 1, &VelocitySetInfo::detectionCallback, &vs_info);
 
   // vector map subscriber
+  // 订阅 矢量地图
   ros::Subscriber sub_dtlane = nh.subscribe("vector_map_info/cross_walk", 1, &CrossWalk::crossWalkCallback, &crosswalk);
   ros::Subscriber sub_area = nh.subscribe("vector_map_info/area", 1, &CrossWalk::areaCallback, &crosswalk);
   ros::Subscriber sub_line = nh.subscribe("vector_map_info/line", 1, &CrossWalk::lineCallback, &crosswalk);
   ros::Subscriber sub_point = nh.subscribe("vector_map_info/point", 1, &CrossWalk::pointCallback, &crosswalk);
 
   // publisher
+  // 发布者
   ros::Publisher detection_range_pub = nh.advertise<visualization_msgs::MarkerArray>("detection_range", 1);
   ros::Publisher obstacle_pub = nh.advertise<visualization_msgs::Marker>("obstacle", 1);
   ros::Publisher obstacle_waypoint_pub = nh.advertise<std_msgs::Int32>("obstacle_waypoint", 1, true);

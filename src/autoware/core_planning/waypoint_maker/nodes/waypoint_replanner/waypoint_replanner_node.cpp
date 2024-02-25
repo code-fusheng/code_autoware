@@ -94,6 +94,7 @@ void WaypointReplannerNode::publishLaneArray()
 {
   autoware_msgs::LaneArray array(lane_array_);
 
+  // 如果 
   if (replanning_mode_)
   {
     replan(array);
@@ -109,11 +110,16 @@ void WaypointReplannerNode::laneCallback(const autoware_msgs::LaneArray::ConstPt
   publishLaneArray();
 }
 
+/**
+ * configCallback 函数
+ * 成员变量初始化
+*/
 void WaypointReplannerNode::configCallback(const autoware_config_msgs::ConfigWaypointReplanner::ConstPtr& conf)
 {
   replanning_mode_ = conf->replanning_mode;
   realtime_tuning_mode_ = conf->realtime_tuning_mode;
   use_decision_maker_ = conf->use_decision_maker;
+  // replanner_ 为 WaypointReplanner 的对象
   replanner_.initParameter(conf);
   if (!lane_array_.lanes.empty() && (is_first_publish_ || realtime_tuning_mode_))
   {

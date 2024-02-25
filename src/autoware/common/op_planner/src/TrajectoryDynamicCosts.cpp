@@ -317,27 +317,38 @@ void TrajectoryDynamicCosts::CalculateLateralAndLongitudinalCostsStatic(vector<T
 		const vector<vector<WayPoint> >& rollOuts, const vector<WayPoint>& totalPaths,
 		const WayPoint& currState, const vector<WayPoint>& contourPoints, const PlanningParams& params,
 		const CAR_BASIC_INFO& carInfo, const VehicleState& vehicleState)
-{
+{	
+	// 计算横向临界距离 车身/2 + 水平安全距离
 	double critical_lateral_distance =  carInfo.width/2.0 + params.horizontalSafetyDistancel;
+	// 计算前方纵向临界距离 轴距/2 + 车身/2 + 垂直安全距离
 	double critical_long_front_distance =  carInfo.wheel_base/2.0 + carInfo.length/2.0 + params.verticalSafetyDistance;
+	// 计算后方纵向临界距离 车身/2 + 垂直安全距离 - 轴距/2
 	double critical_long_back_distance =  carInfo.length/2.0 + params.verticalSafetyDistance - carInfo.wheel_base/2.0;
 
+	// 创建一个矩阵 用于表示车辆位置的逆旋转矩阵
 	PlannerHNS::Mat3 invRotationMat(currState.pos.a-M_PI_2);
+	// 创建一个矩阵 用于表示车辆位置的逆平移矩阵
 	PlannerHNS::Mat3 invTranslationMat(currState.pos.x, currState.pos.y);
 
+	// 计算车辆转弯时侧向滑动的距离
 	double corner_slide_distance = critical_lateral_distance/2.0;
+	// 计算将侧滑距离转化为角度的比例 侧滑距离/最大转向角度
 	double ratio_to_angle = corner_slide_distance/carInfo.max_steer_angle;
+	// 计算实际侧向滑动的距离
 	double slide_distance = vehicleState.steer * ratio_to_angle;
 
+	// 创建车辆尾部左侧的GPS坐标点
 	GPSPoint bottom_left(-critical_lateral_distance ,-critical_long_back_distance,  currState.pos.z, 0);
+	// 创建车辆尾部右侧的GPS坐标点
 	GPSPoint bottom_right(critical_lateral_distance, -critical_long_back_distance,  currState.pos.z, 0);
-
+	// 类似创建了车辆头部 左侧、右侧 和 车身两个边角(考虑侧向滑动)的GPS坐标点
 	GPSPoint top_right_car(critical_lateral_distance, carInfo.wheel_base/3.0 + carInfo.length/3.0,  currState.pos.z, 0);
 	GPSPoint top_left_car(-critical_lateral_distance, carInfo.wheel_base/3.0 + carInfo.length/3.0, currState.pos.z, 0);
 
 	GPSPoint top_right(critical_lateral_distance - slide_distance, critical_long_front_distance,  currState.pos.z, 0);
 	GPSPoint top_left(-critical_lateral_distance - slide_distance , critical_long_front_distance, currState.pos.z, 0);
 
+	// 将尾部左侧的GPS坐标点变换到车辆当前位置和姿态下
 	bottom_left = invRotationMat*bottom_left;
 	bottom_left = invTranslationMat*bottom_left;
 
@@ -356,6 +367,7 @@ void TrajectoryDynamicCosts::CalculateLateralAndLongitudinalCostsStatic(vector<T
 	top_left_car = invRotationMat*top_left_car;
 	top_left_car = invTranslationMat*top_left_car;
 
+	// 将变换后的GPS点添加到表示车辆安全边界的变量
 	m_SafetyBorder.points.clear();
 	m_SafetyBorder.points.push_back(bottom_left) ;
 	m_SafetyBorder.points.push_back(bottom_right) ;
@@ -364,13 +376,16 @@ void TrajectoryDynamicCosts::CalculateLateralAndLongitudinalCostsStatic(vector<T
 	m_SafetyBorder.points.push_back(top_left) ;
 	m_SafetyBorder.points.push_back(top_left_car) ;
 
+	// 初始化轨迹代价索引
 	int iCostIndex = 0;
+	// 如果存在备选轨迹数据
 	if(rollOuts.size() > 0 && rollOuts.at(0).size()>0)
 	{
+		// 获取车辆相对于全局路径的相关信息
 		RelativeInfo car_info;
 		PlanningHelpers::GetRelativeInfo(totalPaths, currState, car_info);
 
-
+		// 遍历轨迹路线
 		for(unsigned int it=0; it< rollOuts.size(); it++)
 		{
 			int skip_id = -1;
@@ -378,62 +393,66 @@ void TrajectoryDynamicCosts::CalculateLateralAndLongitudinalCostsStatic(vector<T
 			{
 				if(skip_id == contourPoints.at(icon).id)
 					continue;
-
+				// 获取障碍物轮廓点相对于全局路径的信息
 				RelativeInfo obj_info;
 				PlanningHelpers::GetRelativeInfo(totalPaths, contourPoints.at(icon), obj_info);
+				// 计算车辆与障碍物轮廓点之间的纵向距离
 				double longitudinalDist = PlanningHelpers::GetExactDistanceOnTrajectory(totalPaths, car_info, obj_info);
+				// 处理车辆前方第一个全局路径点的特殊情况
 				if(obj_info.iFront == 0 && longitudinalDist > 0)
 					longitudinalDist = -longitudinalDist;
-
+				// 计算车辆和轮廓点之间的直线距离
 				double direct_distance = hypot(obj_info.perp_point.pos.y-contourPoints.at(icon).pos.y, obj_info.perp_point.pos.x-contourPoints.at(icon).pos.x);
+				// 如果轮廓点速度小于最小速度且直线距离大于一定值 跳过
 				if(contourPoints.at(icon).v < params.minSpeed && direct_distance > (m_LateralSkipDistance+contourPoints.at(icon).cost))
 				{
 					skip_id = contourPoints.at(icon).id;
 					continue;
 				}
-
+				// 初始化纵向距离的百分比
 				double close_in_percentage = 1;
-//					close_in_percentage = ((longitudinalDist- critical_long_front_distance)/params.rollInMargin)*4.0;
-//
-//					if(close_in_percentage <= 0 || close_in_percentage > 1) close_in_percentage = 1;
+				// close_in_percentage = ((longitudinalDist- critical_long_front_distance)/params.rollInMargin)*4.0;
+				// if(close_in_percentage <= 0 || close_in_percentage > 1) close_in_percentage = 1;
 
+				// 获取轨迹代价对象中的距离中心的距离
 				double distance_from_center = trajectoryCosts.at(iCostIndex).distance_from_center;
 
+				// 根据百分比调整距离中心的值
 				if(close_in_percentage < 1)
 					distance_from_center = distance_from_center - distance_from_center * (1.0-close_in_percentage);
-
+				// 计算横向距离
 				double lateralDist = fabs(obj_info.perp_distance - distance_from_center);
-
+				// 如果纵向距离不在有效范围内 则跳过
 				if(longitudinalDist < -carInfo.length || longitudinalDist > params.minFollowingDistance || lateralDist > m_LateralSkipDistance)
 				{
 					continue;
 				}
-
+				// 调整纵向距离的值
 				longitudinalDist = longitudinalDist - critical_long_front_distance;
-
+				// 判断轮廓点是否在安全边界内 如果是 则设置为轨迹被阻挡
 				if(m_SafetyBorder.PointInsidePolygon(m_SafetyBorder, contourPoints.at(icon).pos) == true)
 					trajectoryCosts.at(iCostIndex).bBlocked = true;
-
+				// 判断轮廓点是否在侧向和纵向范围内， 如果是 则设置轨迹为被阻挡
 				if(lateralDist <= critical_lateral_distance
 						&& longitudinalDist >= -carInfo.length/1.5
 						&& longitudinalDist < params.minFollowingDistance)
 					trajectoryCosts.at(iCostIndex).bBlocked = true;
 
-
+				// 计算横向代价
 				if(lateralDist != 0)
 					trajectoryCosts.at(iCostIndex).lateral_cost += 1.0/lateralDist;
-
+				// 计算纵向代价
 				if(longitudinalDist != 0)
 					trajectoryCosts.at(iCostIndex).longitudinal_cost += 1.0/fabs(longitudinalDist);
 
-
+				// 更新最近障碍物的纵向距离和速度
 				if(longitudinalDist >= -critical_long_front_distance && longitudinalDist < trajectoryCosts.at(iCostIndex).closest_obj_distance)
 				{
 					trajectoryCosts.at(iCostIndex).closest_obj_distance = longitudinalDist;
 					trajectoryCosts.at(iCostIndex).closest_obj_velocity = contourPoints.at(icon).v;
 				}
 			}
-
+			// 增加轨迹代价索引
 			iCostIndex++;
 		}
 	}

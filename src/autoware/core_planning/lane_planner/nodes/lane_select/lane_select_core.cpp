@@ -48,6 +48,9 @@ LaneSelectNode::~LaneSelectNode()
 {
 }
 
+/**
+ * 判断当前车道，同时规划从当前车道切换至其他车道的轨迹
+*/
 void LaneSelectNode::initForROS()
 {
   // setup subscriber
@@ -89,6 +92,7 @@ bool LaneSelectNode::isAllTopicsSubscribed()
 
 void LaneSelectNode::initForLaneSelect()
 {
+  // 判断是否订阅所需要话题
   if (!isAllTopicsSubscribed())
     return;
 

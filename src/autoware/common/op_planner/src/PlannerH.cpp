@@ -22,6 +22,7 @@ PlannerH::~PlannerH()
 {
 }
 
+// 滚动轨迹生成
 void PlannerH::GenerateRunoffTrajectory(const std::vector<std::vector<WayPoint> >& referencePaths,const WayPoint& carPos, const bool& bEnableLaneChange, const double& speed, const double& microPlanDistance,
 		const double& maxSpeed,const double& minSpeed, const double&  carTipMargin, const double& rollInMargin,
 		const double& rollInSpeedFactor, const double& pathDensity, const double& rollOutDensity,

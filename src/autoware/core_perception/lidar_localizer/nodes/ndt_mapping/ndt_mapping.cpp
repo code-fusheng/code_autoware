@@ -445,7 +445,7 @@ static void imu_callback(const sensor_msgs::Imu::Ptr& input)
     imuUpsideDown(input);
   // 当接收到 imu 的消息的时候，获取 imu 当前的时间戳 => 作为当前时间 current_time
   const ros::Time current_time = input->header.stamp;
-  static ros::Time previous_time = current_time;、
+  static ros::Time previous_time = current_time;
   // 计算前后两次接收到消息的微小时间差
   const double diff_time = (current_time - previous_time).toSec();
 
@@ -657,6 +657,10 @@ static void points_callback(const sensor_msgs::PointCloud2::ConstPtr& input)
   else
     // 使用原始初值
     guess_pose_for_ndt = guess_pose;
+
+  if (is_flat) {
+
+  }
 
   // 利用 guess_pose_for_ndt 位置的位姿旋转量 来初始化关于xyz轴的旋转向量
   Eigen::AngleAxisf init_rotation_x(guess_pose_for_ndt.roll, Eigen::Vector3f::UnitX());

@@ -36,6 +36,7 @@ public:
     init();
   }
   // Destructor
+  // 析构函数
   ~WaypointExtractor()
   {
     deinit();
@@ -67,14 +68,22 @@ public:
     return file_path;
   }
 
+  /**
+   * 初始化函数
+  */
   void init()
   {
+    // lane_csv 默认值 /tmp/driving_lane.csv
     private_nh_.param<std::string>("lane_csv", lane_csv_, "/tmp/driving_lane.csv");
     private_nh_.param<std::string>("lane_topic", lane_topic_, "/lane_waypoints_array");
     // setup publisher
+    // 设置发布者
     larray_sub_ = nh_.subscribe(lane_topic_, 1, &WaypointExtractor::LaneArrayCallback, this);
   }
 
+  /**
+   * deinit 函数
+  */
   void deinit()
   {
     if (lane_.lanes.empty())
@@ -92,6 +101,9 @@ public:
     saveLaneArray(dst_multi_file_path, lane_);
   }
 
+  /**
+   * LaneArrayCallback 函数
+  */
   void LaneArrayCallback(const autoware_msgs::LaneArray::ConstPtr& larray)
   {
     if (larray->lanes.empty())

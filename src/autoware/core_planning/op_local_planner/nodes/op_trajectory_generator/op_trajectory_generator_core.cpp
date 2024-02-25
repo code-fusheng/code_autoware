@@ -23,26 +23,30 @@ namespace TrajectoryGeneratorNS
 
 TrajectoryGen::TrajectoryGen()
 {
-	bInitPos = false;
-	bNewCurrentPos = false;
-	bVehicleStatus = false;
-	bWayGlobalPath = false;
+    bInitPos = false;  // 标志位，表示是否初始化车辆位置
+    bNewCurrentPos = false;  // 标志位，表示是否有新的车辆当前位置信息
+    bVehicleStatus = false;  // 标志位，表示是否有车辆状态信息
+    bWayGlobalPath = false;  // 标志位，表示是否有全局路径信息
 
 	ros::NodeHandle _nh;
 	UpdatePlanningParams(_nh);
 
+	// 获取坐标变换信息
 	tf::StampedTransform transform;
 	PlannerHNS::ROSHelpers::GetTransformFromTF("map", "world", transform);
 	m_OriginPos.position.x  = transform.getOrigin().x();
 	m_OriginPos.position.y  = transform.getOrigin().y();
 	m_OriginPos.position.z  = transform.getOrigin().z();
 
+    // 初始化ROS发布器
 	pub_LocalTrajectories = nh.advertise<autoware_msgs::LaneArray>("local_trajectories", 1);
 	pub_LocalTrajectoriesRviz = nh.advertise<visualization_msgs::MarkerArray>("local_trajectories_gen_rviz", 1);
 
+    // 初始化ROS订阅器，订阅初始化位置、当前位置、车辆速度信息、全局路径信息等
 	sub_initialpose = nh.subscribe("/initialpose", 1, &TrajectoryGen::callbackGetInitPose, this);
 	sub_current_pose = nh.subscribe("/current_pose", 10, &TrajectoryGen::callbackGetCurrentPose, this);
 
+	// 根据速度源参数选择相应的速度信息订阅器
 	int bVelSource = 1;
 	_nh.getParam("/op_trajectory_generator/velocitySource", bVelSource);
 	if(bVelSource == 0)
@@ -51,7 +55,7 @@ TrajectoryGen::TrajectoryGen()
 		sub_current_velocity = nh.subscribe("/current_velocity", 10, &TrajectoryGen::callbackGetVehicleStatus, this);
 	else if(bVelSource == 2)
 		sub_can_info = nh.subscribe("/can_info", 10, &TrajectoryGen::callbackGetCANInfo, this);
-
+	// 订阅全局路径信息
 	sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 1, &TrajectoryGen::callbackGetGlobalPlannerPath, this);
 }
 
@@ -193,6 +197,7 @@ void TrajectoryGen::callbackGetGlobalPlannerPath(const autoware_msgs::LaneArrayC
 	}
 }
 
+// 这是一个局部路径规划的ROS节点，主要的功能是根据全局规划路径生成车辆的局部轨迹
 void TrajectoryGen::MainLoop()
 {
 	ros::Rate loop_rate(100);
@@ -205,8 +210,9 @@ void TrajectoryGen::MainLoop()
 
 		if(bInitPos && m_GlobalPaths.size()>0)
 		{
+			// 清空存储全局路径的各个段的容器
 			m_GlobalPathSections.clear();
-
+			// 遍历全局路径的每一段，提取车辆前方视野范围内的路径点，并存储在m_GlobalPathSections中
 			for(unsigned int i = 0; i < m_GlobalPaths.size(); i++)
 			{
 				t_centerTrajectorySmoothed.clear();
@@ -215,8 +221,9 @@ void TrajectoryGen::MainLoop()
 
 				m_GlobalPathSections.push_back(t_centerTrajectorySmoothed);
 			}
-
+			// 定义一个用于调试的存储采样点的容器
 			std::vector<PlannerHNS::WayPoint> sampledPoints_debug;
+			// 调用局部轨迹生成函数，生成车辆的局部轨迹
 			m_Planner.GenerateRunoffTrajectory(m_GlobalPathSections, m_CurrentPos,
 								m_PlanningParams.enableLaneChange,
 								m_VehicleStatus.speed,
@@ -237,7 +244,9 @@ void TrajectoryGen::MainLoop()
 								-1 , -1,
 								m_RollOuts, sampledPoints_debug);
 
+			// 定义存储局部轨迹的消息
 			autoware_msgs::LaneArray local_lanes;
+			// 遍历生成的轨迹，将其转换为Autoware中的Lane消息，并添加到local_lanes中
 			for(unsigned int i=0; i < m_RollOuts.size(); i++)
 			{
 				for(unsigned int j=0; j < m_RollOuts.at(i).size(); j++)
@@ -253,13 +262,17 @@ void TrajectoryGen::MainLoop()
 					local_lanes.lanes.push_back(lane);
 				}
 			}
+			// 发布局部轨迹消息
 			pub_LocalTrajectories.publish(local_lanes);
 		}
 		else
+			// 如果初始位置未初始化或者全局路径为空，则订阅全局路径
 			sub_GlobalPlannerPaths = nh.subscribe("/lane_waypoints_array", 	1,		&TrajectoryGen::callbackGetGlobalPlannerPath, 	this);
-
+		// 定义存储可视化轨迹的消息
 		visualization_msgs::MarkerArray all_rollOuts;
+		// 将生成的轨迹转换为可视化消息
 		PlannerHNS::ROSHelpers::TrajectoriesToMarkers(m_RollOuts, all_rollOuts);
+		// 发布可视化轨迹消息
 		pub_LocalTrajectoriesRviz.publish(all_rollOuts);
 
 		loop_rate.sleep();

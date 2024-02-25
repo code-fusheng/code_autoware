@@ -1420,13 +1420,15 @@ void PlanningHelpers::ExtractPartFromPointToDistance(const vector<WayPoint>& ori
 	//TestQuadraticSpline(extractedPath, tempPath);
 }
 
+// 用于从给定路径中提取一个部分，使得路径从当前位置开始，沿着车辆的方向延伸一定距离
 void PlanningHelpers::ExtractPartFromPointToDistanceDirectionFast(const vector<WayPoint>& originalPath, const WayPoint& pos, const double& minDistance,
 		const double& pathDensity, vector<WayPoint>& extractedPath)
 {
+	// 如果原始路径点少于两个，直接返回
 	if(originalPath.size() < 2 ) return;
-
+	// 清空提取的路径
 	extractedPath.clear();
-
+	// 获取车辆当前位置在原始路径中的最近点索引
 	int close_index = GetClosestNextPointIndexDirectionFast(originalPath, pos);
 	double d = 0;
 
@@ -1453,13 +1455,15 @@ void PlanningHelpers::ExtractPartFromPointToDistanceDirectionFast(const vector<W
 			break;
 	}
 
+	// 如果提取的路径点少于两个，输出错误信息并返回
 	if(extractedPath.size() < 2)
 	{
 		cout << endl << "### Planner Z . Extracted Rollout Path is too Small, Size = " << extractedPath.size() << endl;
 		return;
 	}
-
+	// 根据路径密度修正提取的路径
 	FixPathDensity(extractedPath, pathDensity);
+	// 计算路径的角度和代价
 	CalcAngleAndCost(extractedPath);
 }
 

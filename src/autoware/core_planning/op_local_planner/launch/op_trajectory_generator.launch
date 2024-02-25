@@ -1,6 +1,8 @@
 <launch>
 	<!-- Trajectory Generation Specific Parameters -->
+	<!-- 采样轨迹时，与车尾的最小安全距离 -->
 	<arg name="samplingTipMargin" 		default="4"  /> 
+	<!-- 采样轨迹时，与车侧的最小安全距离 -->
 	<arg name="samplingOutMargin" 		default="16" /> 
 	<arg name="samplingSpeedFactor" 	default="0.25" />		
 	<arg name="enableHeadingSmoothing" 	default="false" />

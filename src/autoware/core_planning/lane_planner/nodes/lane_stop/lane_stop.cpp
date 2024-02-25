@@ -90,12 +90,17 @@ void config_parameter(const autoware_config_msgs::ConfigLaneStop& msg)
 
 } // namespace
 
+/**
+ * lane_stop 节点
+ * 主要作用: 根据信号灯相位选择之前节点 lane_rule 发布的红/绿灯时的导航路径，并将其发布到话题 “/traffic_waypoints_arrays”
+*/
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "lane_stop");
 
   ros::NodeHandle n;
 
+  // 设置参数默认值
   int sub_light_queue_size;
   n.param<int>("/lane_stop/sub_light_queue_size", sub_light_queue_size, 1);
   int sub_waypoint_queue_size;
@@ -108,9 +113,11 @@ int main(int argc, char **argv)
   n.param<bool>("/lane_stop/pub_waypoint_latch", pub_waypoint_latch, true);
   n.param<bool>("/lane_stop/manual_detection", config_manual_detection, true);
 
+  // 设置发布者
   traffic_pub = n.advertise<autoware_msgs::LaneArray>("/traffic_waypoints_array", pub_waypoint_queue_size,
                 pub_waypoint_latch);
 
+  // 设置订阅者
   ros::Subscriber light_sub = n.subscribe("/light_color", sub_light_queue_size, receive_auto_detection);
   ros::Subscriber light_managed_sub = n.subscribe("/light_color_managed", sub_light_queue_size,
               receive_manual_detection);

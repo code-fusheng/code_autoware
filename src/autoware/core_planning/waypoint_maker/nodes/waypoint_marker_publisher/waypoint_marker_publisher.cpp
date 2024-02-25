@@ -70,17 +70,24 @@ void setLifetime(double sec, visualization_msgs::MarkerArray* marker_array)
   }
 }
 
+/**
+ * publishMarkerArray 函数
+ * 根据 delete_markers 选择在 Rviz 中创建/删除 marker_array 中的形状，publisher 发布 marker_array
+*/
 void publishMarkerArray(const visualization_msgs::MarkerArray& marker_array, const ros::Publisher& publisher, bool delete_markers=false)
 {
   visualization_msgs::MarkerArray msg;
 
   // insert local marker
+  // 插入标记
   msg.markers.insert(msg.markers.end(), marker_array.markers.begin(), marker_array.markers.end());
 
+  // 判断 delete_markers
   if (delete_markers)
   {
     for (auto& marker : msg.markers)
     {
+      // 对标记的操作 删除
       marker.action = visualization_msgs::Marker::DELETE;
     }
   }
@@ -329,9 +336,14 @@ void createLocalPointMarker(const autoware_msgs::Lane& lane_waypoint)
   g_local_waypoints_marker_array.markers.push_back(lane_waypoint_marker);
 }
 
+/**
+ * lightCallback 函数
+*/
 void lightCallback(const autoware_msgs::TrafficLightConstPtr& msg)
 {
+  // ROS 消息格式 
   std_msgs::ColorRGBA global_color;
+  // RGBA R: 红 G: 绿 B: 蓝 A: 透明度
   global_color.a = g_global_alpha;
 
   std_msgs::ColorRGBA local_color;
@@ -373,7 +385,9 @@ void receiveAutoDetection(const autoware_msgs::TrafficLightConstPtr& msg)
 
 void receiveManualDetection(const autoware_msgs::TrafficLightConstPtr& msg)
 {
-  if (g_config_manual_detection)
+  if
+  /**
+   * */ (g_config_manual_detection)
     lightCallback(msg);
 }
 
@@ -382,12 +396,19 @@ void configParameter(const autoware_config_msgs::ConfigLaneStopConstPtr& msg)
   g_config_manual_detection = msg->manual_detection;
 }
 
+/**
+ * 
+*/
 void laneArrayCallback(const autoware_msgs::LaneArrayConstPtr& msg)
 {
+  // 首先删除 Rviz 中上一次发布的可视化标记
   publishMarkerArray(g_global_marker_array, g_global_mark_pub, true);
   g_global_marker_array.markers.clear();
+  // 更新全局变量 g_global_marker_array 里标记 lane 的所有轨迹点的速度信息
   createGlobalLaneArrayVelocityMarker(*msg);
+  // 标记 ARROW(箭头) 指示车辆速度方向
   createGlobalLaneArrayOrientationMarker(*msg);
+  // 标记 TEXT_VIEW_FACING(3D的文字) 指示文字
   createGlobalLaneArrayChangeFlagMarker(*msg);
   publishMarkerArray(g_global_marker_array, g_global_mark_pub);
 }
@@ -415,19 +436,19 @@ int main(int argc, char** argv)
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
 
-  // subscribe traffic light
+  // subscribe traffic light 订阅交通信号灯消息
   ros::Subscriber light_sub = nh.subscribe("light_color", 10, receiveAutoDetection);
   ros::Subscriber light_managed_sub = nh.subscribe("light_color_managed", 10, receiveManualDetection);
 
-  // subscribe global waypoints
+  // subscribe global waypoints 订阅全局轨迹点消息
   ros::Subscriber lane_array_sub = nh.subscribe("lane_waypoints_array", 10, laneArrayCallback);
   ros::Subscriber traffic_array_sub = nh.subscribe("traffic_waypoints_array", 10, laneArrayCallback);
 
-  // subscribe local waypoints
+  // subscribe local waypoints 订阅本地轨迹点消息
   ros::Subscriber final_sub = nh.subscribe("final_waypoints", 10, finalCallback);
   ros::Subscriber closest_sub = nh.subscribe("closest_waypoint", 10, closestCallback);
 
-  // subscribe config
+  // subscribe config 订阅配置信息
   ros::Subscriber config_sub = nh.subscribe("config/lane_stop", 10, configParameter);
 
   g_local_mark_pub = nh.advertise<visualization_msgs::MarkerArray>("local_waypoints_mark", 10, true);

@@ -65,6 +65,9 @@ void WaypointReplanner::changeVelSign(autoware_msgs::Lane& lane, bool positive) 
   }
 }
 
+/**
+ * 重规划轨迹点的速度
+*/
 void WaypointReplanner::replanLaneWaypointVel(autoware_msgs::Lane& lane)
 {
   if (lane.waypoints.empty())
@@ -88,9 +91,11 @@ void WaypointReplanner::replanLaneWaypointVel(autoware_msgs::Lane& lane)
     createCurveList(curve_radius, curve_list);
     if (config_.overwrite_vmax_mode)
     {// set velocity_max for all_point
+      // 为所有轨迹点设置最大速度
       setVelocityByRange(0, last, 0, config_.velocity_max, lane);
     }
     // set velocity by curve
+    // 通过曲线设置速度
     for (const auto& el : curve_list)
     {
       const double& radius = el.second.second;
@@ -416,6 +421,9 @@ void WaypointReplanner::limitAccelDecel(const unsigned long idx, autoware_msgs::
   }
 }
 
+/**
+ * calcCurveParam 圆上三点求圆心与半径
+*/
 // get curve 3-Parameter [center_x, center_y, radius] with 3 point input. If error occured, return empty vector.
 const std::vector<double> WaypointReplanner::calcCurveParam(CbufGPoint p) const
 {

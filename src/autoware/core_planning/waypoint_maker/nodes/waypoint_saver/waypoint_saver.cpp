@@ -69,19 +69,25 @@ private:
 WaypointSaver::WaypointSaver() : private_nh_("~")
 {
   // parameter settings
+  // 根据 luanch 文件设置参数
   private_nh_.param<std::string>("save_filename", filename_, std::string("data.txt"));
+  // 订阅车辆位置信息
   private_nh_.param<std::string>("pose_topic", pose_topic_, std::string("current_pose"));
   private_nh_.param<std::string>("velocity_topic", velocity_topic_, std::string("current_velocity"));
   private_nh_.param<double>("interval", interval_, 1.0);
   private_nh_.param<bool>("save_velocity", save_velocity_, false);
 
   // subscriber
+  // 此处为了实现 ROS 消息时间同步与回调
   pose_sub_ = new message_filters::Subscriber<geometry_msgs::PoseStamped>(nh_, pose_topic_, 50);
 
+  // 如果要保存速度
   if (save_velocity_)
   {
+    // 订阅车辆的速度消息
     twist_sub_ = new message_filters::Subscriber<geometry_msgs::TwistStamped>(nh_, velocity_topic_, 50);
     sync_tp_ = new message_filters::Synchronizer<TwistPoseSync>(TwistPoseSync(SYNC_FRAMES), *twist_sub_, *pose_sub_);
+    // ROS 消息时间同步与回调
     sync_tp_->registerCallback(boost::bind(&WaypointSaver::TwistPoseCallback, this, _1, _2));
   }
   else
@@ -90,6 +96,7 @@ WaypointSaver::WaypointSaver() : private_nh_("~")
   }
 
   // publisher
+  // 设置发布者
   waypoint_saver_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("waypoint_saver_marker", 10, true);
 }
 
@@ -111,8 +118,13 @@ void WaypointSaver::TwistPoseCallback(const geometry_msgs::TwistStampedConstPtr 
   outputProcessing(pose_msg->pose, mps2kmph(twist_msg->twist.linear.x));
 }
 
+/**
+ * outputProcessing 函数的作用是 车辆每行驶一定距离就向文件 filename 内写入车辆位置 x,y,z 航向角和车速
+ * 同时调用 displayMarker 函数
+*/
 void WaypointSaver::outputProcessing(geometry_msgs::Pose current_pose, double velocity) const
 {
+  // 在每次写之前找到文件尾
   std::ofstream ofs(filename_.c_str(), std::ios::app);
   static geometry_msgs::Pose previous_pose;
   static bool receive_once = false;
@@ -132,6 +144,7 @@ void WaypointSaver::outputProcessing(geometry_msgs::Pose current_pose, double ve
                            pow((current_pose.position.y - previous_pose.position.y), 2));
 
     // if car moves [interval] meter
+    // 如果车辆的移动位置大于 interval_ (1.0)
     if (distance > interval_)
     {
       ofs << std::fixed << std::setprecision(4) << current_pose.position.x << "," << current_pose.position.y << ","
@@ -143,6 +156,10 @@ void WaypointSaver::outputProcessing(geometry_msgs::Pose current_pose, double ve
   }
 }
 
+/**
+ * displayMarker 函数
+ * waypoint_saver_pub_ 发布消息以在 rviz 显示车辆位置和速度信息
+*/
 void WaypointSaver::displayMarker(geometry_msgs::Pose pose, double velocity) const
 {
   static visualization_msgs::MarkerArray marray;

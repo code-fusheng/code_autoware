@@ -957,20 +957,24 @@ int main(int argc, char **argv)
   ros::NodeHandle h;
   ros::NodeHandle private_nh("~");
 
+  // 创建TF变换相关的对象
   tf::StampedTransform transform;
   tf::TransformListener listener;
   tf::TransformListener vectormap_tf_listener;
 
+  // 设置一些全局变量指针
   _vectormap_transform_listener = &vectormap_tf_listener;
   _transform = &transform;
   _transform_listener = &listener;
 
+// 生成颜色映射
 #if (CV_MAJOR_VERSION == 3)
   generateColors(_colors, 255);
 #else
   cv::generateColors(_colors, 255);
 #endif
 
+  // 初始化ROS发布器
   _pub_cluster_cloud = h.advertise<sensor_msgs::PointCloud2>("/points_cluster", 1);
   _pub_ground_cloud = h.advertise<sensor_msgs::PointCloud2>("/points_ground", 1);
   _centroid_pub = h.advertise<autoware_msgs::Centroids>("/cluster_centroids", 1);
@@ -1045,6 +1049,7 @@ int main(int argc, char **argv)
   private_nh.param("use_multiple_thres", _use_multiple_thres, false);
   ROS_INFO("[%s] use_multiple_thres: %d", __APP_NAME__, _use_multiple_thres);
 
+  // 读取多个阈值参数
   std::string str_distances;
   std::string str_ranges;
   private_nh.param("clustering_distances", str_distances, std::string("[0.5,1.1,1.6,2.1,2.6]"));
@@ -1052,6 +1057,7 @@ int main(int argc, char **argv)
   private_nh.param("clustering_ranges", str_ranges, std::string("[15,30,45,60]"));
     ROS_INFO("[%s] clustering_ranges: %s", __APP_NAME__, str_ranges.c_str());
 
+  // 如果使用多个阈值
   if (_use_multiple_thres)
   {
     YAML::Node distances = YAML::Load(str_distances);

@@ -197,9 +197,13 @@ autoware_msgs::Lane apply_stopline_acceleration(const autoware_msgs::Lane& lane,
   return l;
 }
 
+/**
+ * 遍历 vmap 找寻所有停车线跟前的轨迹点(停止点)
+*/
 std::vector<vector_map::Point> create_stop_points(const lane_planner::vmap::VectorMap& vmap)
 {
   std::vector<vector_map::Point> stop_points;
+  // 遍历 vmap.stoplines
   for (const vector_map::StopLine& s : vmap.stoplines)
   {
     for (const vector_map::Lane& l : vmap.lanes)
@@ -233,24 +237,35 @@ std::vector<vector_map::Point> create_stop_points(const lane_planner::vmap::Vect
   return stop_points;
 }
 
+/**
+ * create_stop_indexes
+ * 遍历 vmap 寻找其中所有的停止点 遍历 lane 中的轨迹点，计算其与 vmap 中停止点之间的距离
+ * 与 vmap 中任一停止点的距离在搜索半径(stopline_search_radius)内的 lane 中轨迹点会被记录在 lane 中的下标
+*/
 std::vector<size_t> create_stop_indexes(const lane_planner::vmap::VectorMap& vmap, const autoware_msgs::Lane& lane,
                                         double stopline_search_radius)
 {
   std::vector<size_t> stop_indexes;
+  // 遍历 vmap 中的所有停止点
   for (const vector_map::Point& p : create_stop_points(vmap))
   {
     size_t index = SIZE_MAX;
     double distance = DBL_MAX;
+    // 遍历所有 lane.waypoints 轨迹点 
     for (size_t i = 0; i < lane.waypoints.size(); ++i)
     {
       vector_map::Point point = lane_planner::vmap::create_vector_map_point(lane.waypoints[i].pose.pose.position);
+      // 计算此停车点和所有行车路径上轨迹点的距离
       double d = hypot(p.bx - point.bx, p.ly - point.ly);
+      // 得到行车点与所有行车路径上轨迹点的最小距离
       if (d <= distance)
       {
         index = i;
         distance = d;
       }
     }
+    // 这个“最小距离”在搜索范围 stopline_search_radius 内即添加这个轨迹点的下标进 stop_indexes
+    // 也就是这个行车路径上的轨迹点足够靠近全局矢量地图 vmap 的某个停止点，可以认为这个轨迹点就是行车路线上的停车点
     if (index != SIZE_MAX && distance <= stopline_search_radius)
     {
       stop_indexes.push_back(index);
@@ -380,6 +395,9 @@ std_msgs::ColorRGBA create_color(int index)
 }
 #endif  // DEBUG
 
+/**
+ * 更新期望轨迹点
+*/
 void create_waypoint(const autoware_msgs::LaneArray& msg)
 {
   std_msgs::Header header;
@@ -484,8 +502,12 @@ void create_waypoint(const autoware_msgs::LaneArray& msg)
   green_pub.publish(green_waypoint);
 }
 
+/**
+ * update_values 函数
+*/
 void update_values()
 {
+  // 对于 lane_navi 节点的判断条件多了 all_vmap.stoplines 与 all_vmap.dtlanes
   if (all_vmap.points.empty() || all_vmap.lanes.empty() || all_vmap.nodes.empty() || all_vmap.stoplines.empty() ||
       all_vmap.dtlanes.empty())
     return;
@@ -498,10 +520,13 @@ void update_values()
   for (const vector_map::DTLane& d : lane_vmap.dtlanes)
   {
     double radius_min = fabs(d.r);
+    // 是弯道
     if (lane_planner::vmap::is_curve_dtlane(d))
     {
+      // 是十字路口
       if (lane_planner::vmap::is_crossroad_dtlane(d))
       {
+        // 以半径 10m 或者更小的半径沿十字路口行驶
         if (radius_min < crossroad_radius_min)
           crossroad_radius_min = radius_min;
       }
@@ -511,6 +536,7 @@ void update_values()
           curve_radius_min = radius_min;
       }
     }
+    // 是回旋道路
     else if (lane_planner::vmap::is_clothoid_dtlane(d))
     {
       if (radius_min < clothoid_radius_min)
@@ -569,6 +595,9 @@ void cache_dtlane(const vector_map::DTLaneArray& msg)
   update_values();
 }
 
+/**
+ * 配置节点内参数
+*/
 void config_parameter(const autoware_config_msgs::ConfigLaneRule& msg)
 {
   config_acceleration = msg.acceleration;
@@ -594,12 +623,14 @@ int main(int argc, char** argv)
   ros::NodeHandle pnh("~");
 
   int sub_vmap_queue_size;
+  // 设置参数默认值
   pnh.param<int>("sub_vmap_queue_size", sub_vmap_queue_size, 1);
   int sub_waypoint_queue_size;
   pnh.param<int>("sub_waypoint_queue_size", sub_waypoint_queue_size, 1);
   int sub_config_queue_size;
   pnh.param<int>("sub_config_queue_size", sub_config_queue_size, 1);
   int pub_waypoint_queue_size;
+  // 设置发布者
   pnh.param<int>("pub_waypoint_queue_size", pub_waypoint_queue_size, 1);
   bool pub_waypoint_latch;
   pnh.param<bool>("pub_waypoint_latch", pub_waypoint_latch, true);
@@ -639,6 +670,7 @@ int main(int argc, char** argv)
   marker_pub = n.advertise<visualization_msgs::Marker>("/waypoint_debug", pub_marker_queue_size, pub_marker_latch);
 #endif  // DEBUG
 
+  // 订阅 lane_waypoints_array 
   ros::Subscriber waypoint_sub = n.subscribe("/lane_waypoints_array", sub_waypoint_queue_size, create_waypoint);
   ros::Subscriber point_sub = n.subscribe("/vector_map_info/point", sub_vmap_queue_size, cache_point);
   ros::Subscriber lane_sub = n.subscribe("/vector_map_info/lane", sub_vmap_queue_size, cache_lane);
