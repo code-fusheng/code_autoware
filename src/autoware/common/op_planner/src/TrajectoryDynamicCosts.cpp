@@ -510,29 +510,37 @@ void TrajectoryDynamicCosts::CalculateLateralAndLongitudinalCosts(vector<Traject
 	m_SafetyBorder.points.push_back(top_left) ;
 	m_SafetyBorder.points.push_back(top_left_car) ;
 
+	// 遍历所有生成的轨迹（rollOuts是包含多个轨迹的容器）
 	for(unsigned int il=0; il < rollOuts.size(); il++)
-	{
+	{	
+		// 检查当前轨迹是否包含路径点
 		if(rollOuts.at(il).size() > 0 && rollOuts.at(il).at(0).size()>0)
 		{
+			// 获取当前车辆相对于全局路径的信息，包括车辆到全局路径的垂直距离、到前方距离等信息
 			RelativeInfo car_info;
 			PlanningHelpers::GetRelativeInfo(totalPaths.at(il), currState, car_info);
 
-
+			// 遍历当前轨迹的所有路径点
 			for(unsigned int it=0; it< rollOuts.at(il).size(); it++)
 			{
+				// 初始化一个变量，用于跳过相同ID的轨迹点，避免重复计算
 				int skip_id = -1;
+				// 遍历障碍物轮廓上的所有点
 				for(unsigned int icon = 0; icon < contourPoints.size(); icon++)
 				{
 					if(skip_id == contourPoints.at(icon).id)
 						continue;
-
+					// 获取障碍物点相对于全局路径的信息
 					RelativeInfo obj_info;
 					PlanningHelpers::GetRelativeInfo(totalPaths.at(il), contourPoints.at(icon), obj_info);
+					// 计算车辆与障碍物点之间在路径上的准确距离
 					double longitudinalDist = PlanningHelpers::GetExactDistanceOnTrajectory(totalPaths.at(il), car_info, obj_info);
+					// 如果障碍物点在车辆后方并且纵向距离为正（车辆前方），则取相反数，表示在车辆前方
 					if(obj_info.iFront == 0 && longitudinalDist > 0)
 						longitudinalDist = -longitudinalDist;
-
+					// 计算障碍物点与其垂直点之间的直线距离
 					double direct_distance = hypot(obj_info.perp_point.pos.y-contourPoints.at(icon).pos.y, obj_info.perp_point.pos.x-contourPoints.at(icon).pos.x);
+					// 如果障碍物速度低于阈值，并且直线距离大于侧向跳跃距离和障碍物成本的和，跳过此障碍物
 					if(contourPoints.at(icon).v < params.minSpeed && direct_distance > (m_LateralSkipDistance+contourPoints.at(icon).cost))
 					{
 						skip_id = contourPoints.at(icon).id;
@@ -541,39 +549,42 @@ void TrajectoryDynamicCosts::CalculateLateralAndLongitudinalCosts(vector<Traject
 
 					double close_in_percentage = 1;
 //					close_in_percentage = ((longitudinalDist- critical_long_front_distance)/params.rollInMargin)*4.0;
-//
 //					if(close_in_percentage <= 0 || close_in_percentage > 1) close_in_percentage = 1;
 
 					double distance_from_center = trajectoryCosts.at(iCostIndex).distance_from_center;
+					// 系列条件判断，检查障碍物与车辆的相对位置，更新轨迹成本，检查是否被阻挡，计算横向和纵向成本
 
+					// 这个条件判断和计算是为了根据close_in_percentage来调整distance_from_center
 					if(close_in_percentage < 1)
+						// 如果close_in_percentage小于1，表示车辆与前方障碍物的纵向距离（或前方可用空间）小于一定阈值，通过调整distance_from_center的值，使轨迹更倾向于靠近车辆。这个调整可能是为了提高通过狭窄空间的可能性。 
 						distance_from_center = distance_from_center - distance_from_center * (1.0-close_in_percentage);
-
+					// 计算当前障碍物点到车辆轨迹中心的横向距离
 					double lateralDist = fabs(obj_info.perp_distance - distance_from_center);
-
+					// 条件判断是否跳过当前障碍物
+					// 如果障碍物相对车辆的纵向距离小于负车辆长度、大于一定的最小跟随距离或者横向距离大于侧向跳跃距离，就跳过当前障碍物的处理
 					if(longitudinalDist < -carInfo.length || longitudinalDist > params.minFollowingDistance || lateralDist > m_LateralSkipDistance)
 					{
 						continue;
 					}
-
+					// 调整longitudinalDist，为了考虑车辆前端的安全距离
 					longitudinalDist = longitudinalDist - critical_long_front_distance;
-
+					// 检查障碍物点是否在安全区域内，如果是，则将对应轨迹的bBlocked标志设置为true，表示该轨迹受到阻挡
 					if(m_SafetyBorder.PointInsidePolygon(m_SafetyBorder, contourPoints.at(icon).pos) == true)
 						trajectoryCosts.at(iCostIndex).bBlocked = true;
-
+					// 检查横向和纵向距离是否满足一定条件，如果满足，则同样将bBlocked标志设置为true。
 					if(lateralDist <= critical_lateral_distance
 							&& longitudinalDist >= -carInfo.length/1.5
 							&& longitudinalDist < params.minFollowingDistance)
 						trajectoryCosts.at(iCostIndex).bBlocked = true;
 
-
+					// 如果横向距离不为零，更新轨迹的横向成本
 					if(lateralDist != 0)
 						trajectoryCosts.at(iCostIndex).lateral_cost += 1.0/lateralDist;
-
+					// 如果纵向距离不为零，更新轨迹的纵向成本
 					if(longitudinalDist != 0)
 						trajectoryCosts.at(iCostIndex).longitudinal_cost += 1.0/fabs(longitudinalDist);
 
-
+					// 如果当前障碍物点在纵向上比当前轨迹记录的最近障碍物点更近，则更新轨迹的最近障碍物信息
 					if(longitudinalDist >= -critical_long_front_distance && longitudinalDist < trajectoryCosts.at(iCostIndex).closest_obj_distance)
 					{
 						trajectoryCosts.at(iCostIndex).closest_obj_distance = longitudinalDist;
