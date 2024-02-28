@@ -870,6 +870,9 @@ void removePointsUpTo(const pcl::PointCloud<pcl::PointXYZ>::Ptr in_cloud_ptr,
   }
 }
 
+/**
+ * 聚类处理的是点云原始数据 并没有进行过TF坐标变换
+*/
 void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud)
 {
   //_start = std::chrono::system_clock::now();
@@ -878,6 +881,7 @@ void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud)
   {
     _using_sensor_cloud = true;
 
+    // 创建一系列点云相关的消息变量
     pcl::PointCloud<pcl::PointXYZ>::Ptr current_sensor_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr removed_points_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled_cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
@@ -891,34 +895,41 @@ void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud)
     autoware_msgs::Centroids centroids;
     autoware_msgs::CloudClusterArray cloud_clusters;
 
+    // 将 ROS 中输入的点云消息转换为 PCL 格式的点云数据
     pcl::fromROSMsg(*in_sensor_cloud, *current_sensor_cloud_ptr);
-
+    // 点云消息的头部信息
     _velodyne_header = in_sensor_cloud->header;
 
+    // 移除点云的距离阈值
     if (_remove_points_upto > 0.0)
     {
+      // 移除距离雷达太近的点
       removePointsUpTo(current_sensor_cloud_ptr, removed_points_cloud_ptr, _remove_points_upto);
     }
     else
     {
       removed_points_cloud_ptr = current_sensor_cloud_ptr;
     }
-
+    // 点云降采样
     if (_downsample_cloud)
       downsampleCloud(removed_points_cloud_ptr, downsampled_cloud_ptr, _leaf_size);
     else
       downsampled_cloud_ptr = removed_points_cloud_ptr;
 
+    // 点云高度剪裁
     clipCloud(downsampled_cloud_ptr, clipped_cloud_ptr, _clip_min_height, _clip_max_height);
 
+    // 保留指定车道宽度内的点
     if (_keep_lanes)
       keepLanePoints(clipped_cloud_ptr, inlanes_cloud_ptr, _keep_lane_left_distance, _keep_lane_right_distance);
     else
       inlanes_cloud_ptr = clipped_cloud_ptr;
 
+    // 移除地面点
     if (_remove_ground)
     {
       removeFloor(inlanes_cloud_ptr, nofloor_cloud_ptr, onlyfloor_cloud_ptr);
+      // 发布移除地面后的点云数据
       publishCloud(&_pub_ground_cloud, onlyfloor_cloud_ptr);
     }
     else
@@ -928,14 +939,17 @@ void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud)
 
     publishCloud(&_pub_points_lanes_cloud, nofloor_cloud_ptr);
 
+    // 差分法线分割
     if (_use_diffnormals)
       differenceNormalsSegmentation(nofloor_cloud_ptr, diffnormals_cloud_ptr);
     else
       diffnormals_cloud_ptr = nofloor_cloud_ptr;
 
+    // 处理后的点云进行距离分割，得到彩色聚类点云
     segmentByDistance(diffnormals_cloud_ptr, colored_clustered_cloud_ptr, centroids,
                       cloud_clusters);
 
+    // 将彩色聚类点云发布到 "/points_cluster" 话题
     publishColorCloud(&_pub_cluster_cloud, colored_clustered_cloud_ptr);
 
     centroids.header = _velodyne_header;
@@ -944,6 +958,7 @@ void velodyne_callback(const sensor_msgs::PointCloud2ConstPtr& in_sensor_cloud)
 
     cloud_clusters.header = _velodyne_header;
 
+    // 聚类信息发布
     publishCloudClusters(&_pub_clusters_message, cloud_clusters, _output_frame, _velodyne_header);
 
     _using_sensor_cloud = false;
@@ -975,14 +990,19 @@ int main(int argc, char **argv)
 #endif
 
   // 初始化ROS发布器
+  // 发布聚类点云的话题
   _pub_cluster_cloud = h.advertise<sensor_msgs::PointCloud2>("/points_cluster", 1);
+  // 发布地面点云的话题
   _pub_ground_cloud = h.advertise<sensor_msgs::PointCloud2>("/points_ground", 1);
+  // 发布聚类中心的话题
   _centroid_pub = h.advertise<autoware_msgs::Centroids>("/cluster_centroids", 1);
-
+  // 发布聚类后的车道点云的话题
   _pub_points_lanes_cloud = h.advertise<sensor_msgs::PointCloud2>("/points_lanes", 1);
+  // 发布聚类信息的话题
   _pub_clusters_message = h.advertise<autoware_msgs::CloudClusterArray>("/detection/lidar_detector/cloud_clusters", 1);
+  // 发布检测到的物体信息的话题
   _pub_detected_objects = h.advertise<autoware_msgs::DetectedObjectArray>("/detection/lidar_detector/objects", 1);
-
+  // 发布边界框信息的话题
  pub_bounding_boxs_ = h.advertise<jsk_recognition_msgs::BoundingBoxArray>("/bounding_boxes", 5);
 
   std::string points_topic, gridmap_topic;
